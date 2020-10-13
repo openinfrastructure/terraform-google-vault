@@ -14,25 +14,6 @@
  * limitations under the License.
  */
 
-# Create the KMS key ring
-resource "google_kms_key_ring" "vault" {
-  name     = var.kms_keyring
-  location = var.region
-  project  = var.project_id
-}
-
-# Create the crypto key for encrypting init keys
-resource "google_kms_crypto_key" "vault-init" {
-  name            = var.kms_crypto_key
-  key_ring        = google_kms_key_ring.vault.id
-  rotation_period = "604800s"
-
-  version_template {
-    algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
-    protection_level = upper(var.kms_protection_level)
-  }
-}
-
 #
 # TLS self-signed certs for Vault.
 #
@@ -101,10 +82,8 @@ resource "tls_cert_request" "vault-server" {
 
   key_algorithm   = tls_private_key.vault-server[0].algorithm
   private_key_pem = tls_private_key.vault-server[0].private_key_pem
-
-  dns_names = var.tls_dns_names
-
-  ip_addresses = concat([local.lb_ip], var.tls_ips)
+  dns_names       = var.tls_dns_names
+  ip_addresses    = var.tls_ips
 
   subject {
     common_name         = var.tls_cn
@@ -132,7 +111,7 @@ resource "tls_locally_signed_cert" "vault-server" {
 resource "google_kms_secret_ciphertext" "vault-tls-key-encrypted" {
   count = local.manage_tls_count
 
-  crypto_key = google_kms_crypto_key.vault-init.self_link
+  crypto_key = var.vault_kms_key_tls
   plaintext  = tls_private_key.vault-server[0].private_key_pem
 }
 
@@ -141,7 +120,7 @@ resource "google_storage_bucket_object" "vault-private-key" {
 
   name    = var.vault_tls_key_filename
   content = google_kms_secret_ciphertext.vault-tls-key-encrypted[0].ciphertext
-  bucket  = local.vault_tls_bucket
+  bucket  = var.vault_tls_bucket
 
   # Ciphertext changes on each invocation, so ignore changes
   lifecycle {
@@ -156,7 +135,7 @@ resource "google_storage_bucket_object" "vault-server-cert" {
 
   name    = var.vault_tls_cert_filename
   content = tls_locally_signed_cert.vault-server[0].cert_pem
-  bucket  = local.vault_tls_bucket
+  bucket  = var.vault_tls_bucket
 }
 
 resource "google_storage_bucket_object" "vault-ca-cert" {
@@ -164,5 +143,5 @@ resource "google_storage_bucket_object" "vault-ca-cert" {
 
   name    = var.vault_ca_cert_filename
   content = tls_self_signed_cert.root[0].cert_pem
-  bucket  = local.vault_tls_bucket
+  bucket  = var.vault_tls_bucket
 }

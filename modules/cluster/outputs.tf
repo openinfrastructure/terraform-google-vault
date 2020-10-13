@@ -44,3 +44,8 @@ output "vault_lb_port" {
   value       = var.vault_port
   description = "Port where Vault is exposed on the load balancer."
 }
+
+output "instance_group" {
+  value       = google_compute_region_instance_group_manager.vault.instance_group
+  description = "The instance groups intended for use with a google_compute_region_backend_service resource"
+}

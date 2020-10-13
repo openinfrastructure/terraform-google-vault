@@ -17,6 +17,11 @@
 # This file contains the actual Vault server definitions
 #
 
+data "google_compute_zones" "available" {
+  project = var.project_id
+  region  = var.region
+}
+
 # Template for creating Vault nodes
 locals {
   lb_scheme         = upper(var.load_balancing_scheme)
@@ -28,6 +33,24 @@ locals {
   api_addr          = var.domain != "" ? "https://${var.domain}:${var.vault_port}" : "https://${local.lb_ip}:${var.vault_port}"
   host_project      = var.host_project_id != "" ? var.host_project_id : var.project_id
   lb_ip             = local.use_external_lb ? google_compute_forwarding_rule.external[0].ip_address : var.ip_address
+  hc_self_link      = var.hc_self_link_provided ? var.hc_self_link : google_compute_health_check.vault_autoheal[0].id
+  zones             = length(var.zones) > 0 ? var.zones : data.google_compute_zones.available.names
+}
+
+resource "google_compute_health_check" "vault_autoheal" {
+  count   = var.hc_self_link_provided ? 0 : 1
+  project = var.project_id
+  name    = "vault-health-autoheal"
+
+  check_interval_sec  = 30
+  timeout_sec         = 5
+  healthy_threshold   = 1
+  unhealthy_threshold = 2
+
+  https_health_check {
+    port         = var.vault_port
+    request_path = "/v1/sys/health?uninitcode=200"
+  }
 }
 
 resource "google_compute_instance_template" "vault" {
@@ -49,14 +72,16 @@ resource "google_compute_instance_template" "vault" {
   disk {
     source_image = var.vault_instance_base_image
     type         = "PERSISTENT"
-    disk_type    = "pd-ssd"
+    disk_type    = var.disk_type
     mode         = "READ_WRITE"
     boot         = true
+    auto_delete  = true
+    disk_size_gb = var.disk_size_gb
   }
 
   service_account {
     email  = var.vault_service_account_email
-    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+    scopes = ["cloud-platform"]
   }
 
   metadata = merge(
@@ -67,10 +92,14 @@ resource "google_compute_instance_template" "vault" {
     },
   )
 
+  scheduling {
+    preemptible       = var.preemptible
+    automatic_restart = var.preemptible ? false : true
+  }
+
   lifecycle {
     create_before_destroy = true
   }
-
 }
 
 ############################
@@ -173,13 +202,25 @@ resource "google_compute_forwarding_rule" "external" {
 
 # Vault instance group manager
 resource "google_compute_region_instance_group_manager" "vault" {
-  project = var.project_id
+  project                   = var.project_id
+  name                      = "vault-igm"
+  region                    = var.region
+  base_instance_name        = "vault-${var.region}"
+  distribution_policy_zones = local.zones
+  target_size               = var.num_instances
+  wait_for_instances        = false
 
-  name   = "vault-igm"
-  region = var.region
+  auto_healing_policies {
+    health_check      = local.hc_self_link
+    initial_delay_sec = var.hc_initial_delay_secs
+  }
 
-  base_instance_name = "vault-${var.region}"
-  wait_for_instances = false
+  update_policy {
+    type                  = "OPPORTUNISTIC"
+    minimal_action        = "REPLACE"
+    max_unavailable_fixed = length(local.zones)
+    min_ready_sec         = var.min_ready_sec
+  }
 
   target_pools = local.use_external_lb ? [google_compute_target_pool.vault[0].self_link] : []
 
@@ -195,6 +236,7 @@ resource "google_compute_region_instance_group_manager" "vault" {
 
 # Autoscaling policies for vault
 resource "google_compute_region_autoscaler" "vault" {
+  count   = var.autoscale ? 1 : 0
   project = var.project_id
 
   name   = "vault-as"

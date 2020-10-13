@@ -16,6 +16,8 @@
 
 locals {
   service_account_member = "serviceAccount:${var.vault_service_account_email}"
+  tls_buckets = compact([var.vault_tls_bucket])
+  kms_keyring = var.kms_keyring == "" ? "projects/${var.project_id}/locations/us/keyrings/vault" : var.kms_keyring
 }
 
 # Give project-level IAM permissions to the service account.
@@ -44,23 +46,22 @@ resource "google_storage_bucket_iam_member" "vault" {
 
 # Give kms cryptokey-level permissions to the service account.
 resource "google_kms_crypto_key_iam_member" "ck-iam" {
-  crypto_key_id = google_kms_crypto_key.vault-init.self_link
+  crypto_key_id = "${local.kms_keyring}/cryptoKeys/${var.kms_crypto_key}"
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = local.service_account_member
 }
 
-resource "google_kms_crypto_key_iam_member" "tls-ck-iam" {
-  count = var.manage_tls == false ? 1 : 0
-
-  crypto_key_id = var.vault_tls_kms_key
-  role          = "roles/cloudkms.cryptoKeyDecrypter"
-  member        = local.service_account_member
+# Vault needs the cloudkms.cryptoKeys.get permission
+# See: https://www.vaultproject.io/docs/configuration/seal/gcpckms.html
+resource "google_kms_key_ring_iam_member" "ck-iam" {
+  key_ring_id = local.kms_keyring
+  role        = "roles/cloudkms.admin"
+  member      = local.service_account_member
 }
 
-resource "google_storage_bucket_iam_member" "tls-bucket-iam" {
-  count = var.manage_tls == false ? 1 : 0
-
-  bucket = var.vault_tls_bucket
-  role   = "roles/storage.objectViewer"
-  member = local.service_account_member
+resource "google_storage_bucket_iam_member" "bucket-iam" {
+  for_each = toset(local.tls_buckets)
+  bucket   = each.value
+  role     = "roles/storage.objectViewer"
+  member   = local.service_account_member
 }

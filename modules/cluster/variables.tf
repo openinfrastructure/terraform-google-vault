@@ -15,23 +15,20 @@
  */
 
 variable "project_id" {
-  type = string
-
-  description = "ID of the project in which to create resources and add IAM bindings."
+  description = "Project ID to contain managed resources."
+  type        = string
 }
 
 variable "host_project_id" {
-  type    = string
-  default = ""
-
   description = "ID of the host project if using Shared VPC"
+  type        = string
+  default     = ""
 }
 
 variable "region" {
-  type    = string
-  default = "us-east4"
-
   description = "Region in which to create resources."
+  type        = string
+  default     = "us-east4"
 }
 
 variable "subnet" {
@@ -56,38 +53,8 @@ variable "vault_storage_bucket" {
 }
 
 variable "vault_service_account_email" {
-  type        = string
   description = "Vault service account email"
-}
-
-variable "service_account_project_iam_roles" {
-  type = list(string)
-
-  default = [
-    "roles/logging.logWriter",
-    "roles/monitoring.metricWriter",
-    "roles/monitoring.viewer",
-  ]
-
-  description = "List of IAM roles for the Vault admin service account to function. If you need to add additional roles, update `service_account_project_additional_iam_roles` instead."
-}
-
-variable "service_account_project_additional_iam_roles" {
-  type    = list(string)
-  default = []
-
-  description = "List of custom IAM roles to add to the project."
-}
-
-variable "service_account_storage_bucket_iam_roles" {
-  type = list(string)
-
-  default = [
-    "roles/storage.legacyBucketReader",
-    "roles/storage.objectAdmin",
-  ]
-
-  description = "List of IAM roles for the Vault admin service account to have on the storage bucket."
+  type        = string
 }
 
 #
@@ -96,98 +63,137 @@ variable "service_account_storage_bucket_iam_roles" {
 # --------------------
 
 variable "kms_keyring" {
-  type    = string
-  default = "vault"
-
-  description = "Name of the Cloud KMS KeyRing for asset encryption. Terraform will create this keyring."
-
+  description = "Name of the Cloud KMS KeyRing for unsealing vault and TLS keys."
+  type        = string
+  default     = "vault"
 }
 
 variable "kms_crypto_key" {
-  type    = string
-  default = "vault-init"
-
-  description = "The name of the Cloud KMS Key used for encrypting initial TLS certificates and for configuring Vault auto-unseal. Terraform will create this key."
-}
-
-variable "kms_protection_level" {
-  type    = string
-  default = "software"
-
-  description = "The protection level to use for the KMS crypto key."
+  description = "The name of the Cloud KMS Key used for encrypting initial TLS certificates and for configuring Vault auto-unseal."
+  type        = string
+  default     = "vault-init"
 }
 
 
 #TODO: Evaluate https://www.terraform.io/docs/configuration/variables.html#custom-validation-rules when prod ready
 variable "load_balancing_scheme" {
-  type    = string
-  default = "EXTERNAL"
-
   description = "Options are INTERNAL or EXTERNAL. If `EXTERNAL`, the forwarding rule will be of type EXTERNAL and a public IP will be created. If `INTERNAL` the type will be INTERNAL and a random RFC 1918 private IP will be assigned"
+  type        = string
+  default     = "EXTERNAL"
 }
 
 variable "vault_args" {
-  type    = string
-  default = ""
-
   description = "Additional command line arguments passed to Vault server"
+  type        = string
+  default     = ""
 }
 
 variable "vault_instance_labels" {
-  type    = map(string)
-  default = {}
-
   description = "Labels to apply to the Vault instances."
+  type        = map(string)
+  default     = {}
 }
 
 variable "vault_ca_cert_filename" {
-  type    = string
-  default = "ca.crt"
-
   description = "GCS object path within the vault_tls_bucket. This is the root CA certificate."
+  type        = string
+  default     = "ca.crt"
 }
 
 variable "vault_instance_metadata" {
-  type    = map(string)
-  default = {}
-
   description = "Additional metadata to add to the Vault instances."
+  type        = map(string)
+  default     = {}
 }
 
 variable "vault_instance_base_image" {
-  type    = string
-  default = "debian-cloud/debian-9"
-
   description = "Base operating system image in which to install Vault. This must be a Debian-based system at the moment due to how the metadata startup script runs."
+  type        = string
+  default     = "debian-cloud/debian-9"
 }
 
 variable "vault_instance_tags" {
-  type    = list(string)
-  default = []
-
   description = "Additional tags to apply to the instances. Note 'allow-ssh' and 'allow-vault' will be present on all instances."
+  type        = list(string)
+  default     = []
 }
 
 variable "vault_log_level" {
-  type    = string
-  default = "warn"
-
   description = "Log level to run Vault in. See the Vault documentation for valid values."
+  type        = string
+  default     = "warn"
 }
 
 variable "vault_min_num_servers" {
-  type    = string
-  default = "1"
-
   description = "Minimum number of Vault server nodes in the autoscaling group. The group will not have less than this number of nodes."
+  type        = string
+  default     = "1"
 }
 
 variable "vault_machine_type" {
-  type    = string
-  default = "n1-standard-1"
-
   description = "Machine type to use for Vault instances."
+  type        = string
+  default     = "n1-standard-1"
+}
 
+variable "preemptible" {
+  description = "Allows instance to be preempted. This defaults to false. See https://cloud.google.com/compute/docs/instances/preemptible"
+  type        = bool
+  default     = false
+}
+
+variable "autoscale" {
+  description = "Enable autoscaling default configuration.  For advanced configuration, set to false and manage your own google_compute_autoscaler resource with target set this module's instance_group.id output value."
+  type        = bool
+  default     = true
+}
+
+variable "num_instances" {
+  description = "The number of instances in the instance group"
+  type        = number
+  default     = 1
+}
+
+variable "hc_self_link" {
+  description = "The health check self link used for auto healing.  This health check may be reused with backend services.  If blank, a health check will be created."
+  type        = string
+  default     = ""
+}
+
+variable "hc_self_link_provided" {
+  description = "Use the provided hc_self_link for autohealing if true."
+  type        = bool
+  default     = false
+}
+
+variable "min_ready_sec" {
+  description = "Minimum number of seconds to wait for after a newly created instance becomes available. This value must be from range. [0,3600]"
+  type        = string
+  default     = "300"
+}
+
+variable "zones" {
+  description = "The zones to distribute instances across.  If empty, all zones in the region are used.  ['us-west1-a', 'us-west1-b', 'us-west1-c']"
+  type        = list(string)
+  default     = []
+}
+
+variable "disk_type" {
+  description = "The persistent disk type to use with the vault server instance template.  See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#disk_type"
+  type        = string
+  default     = "pd-ssd"
+}
+
+variable "disk_size_gb" {
+  description = "The size in GB of the persistent disk attached to each multinic instance.  The source_image size is used if unspecified."
+  type        = string
+  default     = null
+}
+
+variable "hc_initial_delay_secs" {
+  description = "The number of seconds that the managed instance group waits before it applies autohealing policies to new instances or recently recreated instances."
+  type        = number
+  default     = 60
 }
 
 variable "vault_max_num_servers" {

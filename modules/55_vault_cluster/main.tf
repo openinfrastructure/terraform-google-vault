@@ -68,6 +68,12 @@ resource "google_compute_instance_template" "vault" {
   tags         = var.vault_instance_tags
   labels       = var.vault_instance_labels
 
+  shielded_instance_config {
+    enable_integrity_monitoring = true
+    enable_secure_boot          = true
+    enable_vtpm                 = true
+  }
+
   network_interface {
     subnetwork = var.subnetwork
   }

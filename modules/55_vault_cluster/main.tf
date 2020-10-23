@@ -299,7 +299,15 @@ resource "google_compute_region_instance_group_manager" "vault" {
     port = var.vault_port
   }
 
+  ## Update safely with:
+  # REGION=us-west1
+  # MIG="$(gcloud compute instance-groups managed list --format='value(name)')"
+  # TEMPLATE="$(gcloud compute instance-groups managed describe $MIG" --region=us-west1 --format='value(instanceTemplate)')"
+  # gcloud compute instance-groups managed rolling-action \
+  #   start-update $MIG --version template=$TEMPLATE \
+  #   --region=$REGION --max-unavailable 1
   version {
     instance_template = google_compute_instance_template.vault.self_link
+    name              = "active"
   }
 }

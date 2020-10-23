@@ -59,6 +59,14 @@ resource "google_kms_key_ring_iam_member" "ck-iam" {
   member      = local.service_account_member
 }
 
+# Grant Vault the ability to create JWT tokens for itself.  This enables the
+# shutdown script to login to Vault and execute vault operator step-down
+resource "google_service_account_iam_member" "vault_server_TokenCreator" {
+  service_account_id = "projects/-/serviceAccounts/${var.vault_service_account_email}"
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${var.vault_service_account_email}"
+}
+
 resource "google_storage_bucket_iam_member" "bucket-iam" {
   for_each = toset(local.tls_buckets)
   bucket   = each.value

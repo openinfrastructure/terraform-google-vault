@@ -193,11 +193,9 @@ systemctl restart rsyslog
 # Install Stackdriver for logging and monitoring
 # Logging Agent: https://cloud.google.com/logging/docs/agent/installation
 curl -sSfL https://dl.google.com/cloudagents/add-logging-agent-repo.sh | bash
-# Monitoring Agent: https://cloud.google.com/monitoring/agent/installation
-curl -sSfL https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh | bash
 apt-get update -yqq
 # Install structured logs
-apt-get install -yqq 'stackdriver-agent=6.*' 'google-fluentd=1.*' google-fluentd-catch-all-config-structured
+apt-get install -yqq 'google-fluentd=1.*' google-fluentd-catch-all-config-structured
 
 # Start Stackdriver logging agent and setup the filesystem to be ready to
 # receive audit logs
@@ -270,17 +268,6 @@ cat <<"EOF" > /etc/logrotate.d/vaultproject.io
   endscript
 }
 EOF
-
-# Start Stackdriver monitoring
-mkdir -p /opt/stackdriver/collectd/etc/collectd.d /etc/stackdriver/collectd.d
-curl -sSfLo /etc/stackdriver/collectd.d/statsd.conf \
-  https://raw.githubusercontent.com/Stackdriver/stackdriver-agent-service-configs/master/etc/collectd.d/statsd.conf
-
-# Fix `wg_typed_value_create_from_value_t_inline` log spam
-# See https://github.com/openinfrastructure/platform/issues/44
-perl -i -pe 'BEGIN{undef $/;} s,LoadPlugin swap.*?/Plugin>,# swap plugin disabled by startup-script https://github.com/openinfrastructure/platform/issues/44,smg' /etc/stackdriver/collectd.conf
-
-service stackdriver-agent restart
 
 #########################################
 ##          user_startup_script        ##

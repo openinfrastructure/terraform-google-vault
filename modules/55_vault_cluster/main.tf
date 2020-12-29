@@ -281,7 +281,7 @@ resource "google_compute_region_instance_group_manager" "vault" {
   }
 
   update_policy {
-    type                  = "OPPORTUNISTIC"
+    type                  = "PROACTIVE"
     minimal_action        = "REPLACE"
     max_unavailable_fixed = 0
     max_surge_fixed       = length(local.zones)
